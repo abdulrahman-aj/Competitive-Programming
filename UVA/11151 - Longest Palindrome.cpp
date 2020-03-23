@@ -7,8 +7,7 @@ const int N = 1010;
 string s;
 int dp[N][N], n, t;
 
-int solve(int l, int r)
-{
+int solve(int l, int r) {
   assert(l <= r);
   if (dp[l][r] != -1) return dp[l][r];
   if (l == r) return dp[l][r] = 1;
@@ -19,14 +18,12 @@ int solve(int l, int r)
   return dp[l][r];
 }
 
-int main()
-{
+int main() {
   ios_base::sync_with_stdio(0);
   cin.tie(0);
   cin >> t;
   cin.ignore();
-  while (t--)
-  {
+  while (t--) {
     memset(dp, -1, sizeof(dp));
     getline(cin, s);
     n = s.size();
