@@ -1,5 +1,5 @@
 # Competitive-Programming
-my solutions to some problems
+Some of my solutions to problems I found interesting :)
 
 
 # UVA Online-Judge
