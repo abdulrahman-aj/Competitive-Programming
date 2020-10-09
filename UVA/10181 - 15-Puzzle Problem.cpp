@@ -28,6 +28,7 @@ const int dc[] = {-1, +1,  0,  0};
 const int LENGTH = 4;
 const int SIZE = LENGTH * LENGTH;
 const int BITS = 4;
+const int ONES = (1 << BITS) - 1;
 const T GOAL = 17134975606245761295;
 
 bool solvable(vector<int>& p) {
@@ -38,6 +39,7 @@ bool solvable(vector<int>& p) {
         ++inv;
     }
   }
+
   if (LENGTH % 2 == 1) {
     return inv % 2 == 0;
   } else {
@@ -46,133 +48,146 @@ bool solvable(vector<int>& p) {
   }
 }
 
-inline bool valid(int x, int y) { return x >= 0 && x < LENGTH && y >= 0 && y < LENGTH; }
+inline bool valid(int x, int y) { 
+  return x >= 0 && x < LENGTH && y >= 0 && y < LENGTH;
+}
 
 T myHash(vector<int>& a) {
-  T ans = 0;
+  T mask = 0;
   for (int i = 0; i < SIZE; ++i) {
-    ans |= (T)i << (a[i] * BITS);
+    mask |= (T)i << (a[i] * BITS);
   }
-  return ans;
+  return mask;
 }
 
 int manhattanDistance(T a, T b) {
-  int ans = 0;
+  int ret = 0;
   a >>= BITS;
   b >>= BITS;
-  for (int i = 0; i < SIZE - 1; ++i) {
-    int pos1 = a & ((1 << BITS) - 1);
-    int pos2 = b & ((1 << BITS) - 1);
-    ans += abs(pos1 / LENGTH - pos2 / LENGTH) + abs(pos1 % LENGTH - pos2 % LENGTH);
-    a >>= BITS;
-    b >>= BITS;
+  for (int i = 0; i < SIZE - 1; ++i, a >>= BITS, b >>= BITS) {
+    int pos1 = a & ONES;
+    int pos2 = b & ONES;
+    ret += abs(pos1 / LENGTH - pos2 / LENGTH);
+    ret += abs(pos1 % LENGTH - pos2 % LENGTH);
   }
-  return ans;
+  return ret;
 }
 
-vector<pair<T, int>> actions(T t) {
-  vector<pair<T, int>> ans;
+vector<pair<T, int>> actions(T state) {
+  vector<pair<T, int>> ret;
 
-  int pos = t & ((1 << BITS) - 1);
+  int pos = state & ONES; // Position of empty tile
   int row = pos / LENGTH;
   int col = pos % LENGTH;
-  
-  for (int d = 0; d < 4; ++d) {
-    int nrow = row + dr[d];
-    int ncol = col + dc[d];
 
-    if (valid(nrow, ncol)) {
-      int npos = nrow * LENGTH + ncol;
-      int loc = -1;
+  for (int direction = 0; direction < 4; ++direction) {
+    int new_row = row + dr[direction];
+    int new_col = col + dc[direction];
+
+    if (valid(new_row, new_col)) {
+      int new_pos = new_row * LENGTH + new_col;
+      int swap_pos = -1;
+
       for (int i = 0; i < SIZE; ++i) {
-        if ((int)((t >> (i * BITS)) & ((1 << BITS) - 1)) == npos) {
-          loc = i;
+        if ((int)((state >> (i * BITS)) & ONES) == new_pos) {
+          swap_pos = i;
           break;
         }
       }
-      assert(loc != -1);
 
-      T to = t;
-      to &= ~((1 << BITS) - 1);
-      to &= ~(((T(1) << BITS) - 1) << (loc * BITS));
-      to |= npos;
-      to |= (T)pos << (loc * BITS);
+      assert(swap_pos != -1);
 
-      ans.emplace_back(to, d);
+      T new_state = state;
+      new_state &= ~ONES;
+      new_state &= ~((T)ONES << (swap_pos * BITS));
+      new_state |= new_pos;
+      new_state |= (T)pos << (swap_pos * BITS);
+
+      ret.emplace_back(new_state, direction);
     }
   }
 
-  return ans;
+  return ret;
 }
 
-string solve(T src) {
+string solve(T source) {
   priority_queue<Node> q[2];
-  map<T, T> parent[2];
-  map<T, char> action[2];
-  T goal[2] = {GOAL, src};
-
-  // $ -> no action
-  q[0].emplace(src, 0, '$', 0, manhattanDistance(src, GOAL));
-  q[1].emplace(GOAL, 0, '$', 0, manhattanDistance(src, GOAL));
+  map<T, pair<T, char>> last[2]; // Stores parent and action
   
+  T goal[2] = {GOAL, source};
+
+  // $ for no action
+  q[0].emplace(source, 0, '$', 0, manhattanDistance(source, GOAL));
+  q[1].emplace(GOAL  , 0, '$', 0, manhattanDistance(source, GOAL));
+
   vector<T> candidates;
   bool done = false;
-  
+
   while (!done) {
     done = true;
-    
-    for (int i : {0, 1}) {
+
+    for (int i = 0; i < 2; ++i) {
       if (!q[i].empty()) {
         done = false;
 
-        Node t = q[i].top();
+        auto top = q[i].top();
         q[i].pop();
-        
-        if (action[i].count(t.state))
+
+        if (last[i].count(top.state))
           continue;
         
-        parent[i][t.state] = t.parent;
-        action[i][t.state] = t.action;
+        last[i][top.state] = {top.parent, top.action};
         
-        candidates.push_back(t.state);
-        
-        for (auto& a : actions(t.state)) {
-          if (!action[i].count(a.first)) {
-            q[i].emplace(a.first, t.state, a.second, t.cost + 1, manhattanDistance(a.first, goal[i]));
+        candidates.push_back(top.state);
+
+        for (auto &action : actions(top.state)) {
+          if (!last[i].count(action.first)) {
+            q[i].emplace(
+              action.first,
+              top.state,
+              action.second,
+              top.cost + 1,
+              manhattanDistance(action.first, goal[i])
+            );
           }
         }
       }
     }
 
-    for (T& x : candidates) {
-      if (action[0].count(x) && action[1].count(x)) {
-        string ans;
-        
-        T cur = x;
-        while (action[0][cur] != '$') {
-          ans.push_back(dir[(int)action[0][cur]]);
-          cur = parent[0][cur];
+    for (auto &candidate : candidates) {
+      if (last[0].count(candidate) && last[1].count(candidate)) {
+        string ret;
+
+        T cur = candidate;
+        while (true) {
+          auto prev = last[0][cur];
+          if (prev.second == '$')
+            break;
+          
+          ret.push_back(dir[(int)prev.second]);
+          cur = prev.first;
         }
 
-        reverse(ans.begin(), ans.end());
+        reverse(ret.begin(), ret.end());
 
-        cur = x;
-        while (action[1][cur] != '$') {
-          ans.push_back(dir[action[1][cur] ^ 1]);
-          cur = parent[1][cur];
+        cur = candidate;
+        while (true) {
+          auto prev = last[1][cur];
+          if (prev.second == '$')
+            break;
+          
+          ret.push_back(dir[prev.second ^ 1]);
+          cur = prev.first;
         }
 
-        return ans;
+        return ret;
       }
     }
 
     candidates.clear();
-
-    if (done)
-      break;
   }
 
-  return "-1";
+  assert(false);
 }
 
 int main() {
