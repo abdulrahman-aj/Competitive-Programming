@@ -1,2 +1,2 @@
 # Competitive-Programming
-Some of my solutions to problems I found interesting.
+Some of my solutions to cp problems.
